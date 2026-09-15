@@ -19,6 +19,7 @@ export interface ChatMessage {
 
 export interface SendChatMessageRequest {
   message: string;
+  chatId?: string;
   model?: string;
   provider?: string;
   tools?: string[];

@@ -43,9 +43,6 @@ export function ChatComposer({
   const [selectedModel, setSelectedModel] =
     useState<AIModel | null>(null);
 
-  const [selectedTools, setSelectedTools] =
-    useState<string[]>([]);
-
   const [attachedFiles, setAttachedFiles] =
     useState<File[]>([]);
 
@@ -113,7 +110,6 @@ export function ChatComposer({
       message: trimmedMessage,
       model: selectedModel.id,
       provider: selectedModel.provider,
-      tools: selectedTools,
     };
 
     onSend(request);
@@ -307,9 +303,7 @@ export function ChatComposer({
 
             {/* Right controls */}
             <div className="flex min-w-0 items-center gap-1">
-              <ToolsSelector
-                onSelectionChange={setSelectedTools}
-              />
+              <ToolsSelector />
 
               <ModelSelector
                 value={selectedModel ?? undefined}

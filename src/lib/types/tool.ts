@@ -1,65 +1,51 @@
+export type ToolSource = "custom" | "mcp";
+
 export type ToolStatus =
   | "connected"
   | "available"
-  | "not_available";
+  | "not_available"
+  | "error";
 
-export type ToolId =
-  | "github"
-  | "jenkins"
-  | "kubernetes"
-  | "docker"
-  | "prometheus"
-  | "grafana"
-  | "gcp";
+export interface ToolConnectionField {
+  key: string;
+  label: string;
+  type: string;
+  required?: boolean;
+  secret?: boolean;
+}
+
+export interface ToolConnectionSchema {
+  fields: ToolConnectionField[];
+}
 
 export interface DevOpsTool {
-  id: ToolId;
+  id: string;
   name: string;
   description: string;
+  sourceType: ToolSource;
+  connectionSchema: ToolConnectionSchema;
   status: ToolStatus;
 }
 
-export const DEVOPS_TOOLS: DevOpsTool[] = [
-  {
-    id: "github",
-    name: "GitHub",
-    description: "Repositories, pull requests and workflows",
-    status: "available",
-  },
-  {
-    id: "jenkins",
-    name: "Jenkins",
-    description: "Builds, pipelines and deployments",
-    status: "available",
-  },
-  {
-    id: "kubernetes",
-    name: "Kubernetes",
-    description: "Clusters, pods and workloads",
-    status: "available",
-  },
-  {
-    id: "docker",
-    name: "Docker",
-    description: "Containers and images",
-    status: "available",
-  },
-  {
-    id: "prometheus",
-    name: "Prometheus",
-    description: "Metrics and time-series data",
-    status: "available",
-  },
-  {
-    id: "grafana",
-    name: "Grafana",
-    description: "Dashboards and observability",
-    status: "available",
-  },
-  {
-    id: "gcp",
-    name: "Google Cloud",
-    description: "Cloud resources and services",
-    status: "available",
-  },
-];
+export interface ToolConnection {
+  id: string;
+  integrationId: string;
+  providerId: string;
+  connectionName: string;
+  status: "connected" | "error" | "disabled";
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ToolIntegration {
+  id: string;
+  providerId: string;
+  name: string;
+  description: string;
+  sourceType: ToolSource;
+  connectionSchema: ToolConnectionSchema;
+  isEnabled: boolean;
+  status: ToolStatus;
+  connection: ToolConnection | null;
+}

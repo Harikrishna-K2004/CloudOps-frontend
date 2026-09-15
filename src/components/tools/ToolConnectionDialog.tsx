@@ -1,9 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { KeyRound, Link } from "lucide-react";
+import {
+  KeyRound,
+  Link,
+  Loader2,
+} from "lucide-react";
 
 import { Button } from "@/src/components/ui/button";
+
 import {
   Dialog,
   DialogContent,
@@ -12,31 +17,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/src/components/ui/dialog";
+
 import { Input } from "@/src/components/ui/input";
 import { Label } from "@/src/components/ui/label";
 
-import type { DevOpsTool } from "@/src/lib/types/tool";
+import type {
+  ToolIntegration,
+} from "@/src/lib/types/tool";
+
+import { connectTool } from "@/src/lib/api/tools";
 
 interface ToolConnectionDialogProps {
-  tool: DevOpsTool | null;
+  tool: ToolIntegration | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConnected?: (toolId: DevOpsTool["id"]) => void;
+  onConnected?: () => void | Promise<void>;
 }
-
-interface ConnectionForm {
-  url: string;
-  username: string;
-  token: string;
-  projectId: string;
-}
-
-const EMPTY_FORM: ConnectionForm = {
-  url: "",
-  username: "",
-  token: "",
-  projectId: "",
-};
 
 export function ToolConnectionDialog({
   tool,
@@ -44,16 +40,20 @@ export function ToolConnectionDialog({
   onOpenChange,
   onConnected,
 }: ToolConnectionDialogProps) {
-  const [form, setForm] =
-    useState<ConnectionForm>(EMPTY_FORM);
+  const [values, setValues] =
+    useState<Record<string, string>>({});
 
   const [isConnecting, setIsConnecting] =
     useState(false);
 
+  const [error, setError] =
+    useState<string | null>(null);
+
   useEffect(() => {
     if (!open) {
-      setForm(EMPTY_FORM);
+      setValues({});
       setIsConnecting(false);
+      setError(null);
     }
   }, [open]);
 
@@ -61,252 +61,60 @@ export function ToolConnectionDialog({
     return null;
   }
 
+  const fields =
+    tool.connectionSchema?.fields ?? [];
+
   const updateField = (
-    field: keyof ConnectionForm,
+    key: string,
     value: string,
   ) => {
-    setForm((current) => ({
+    setValues((current) => ({
       ...current,
-      [field]: value,
+      [key]: value,
     }));
+
+    setError(null);
   };
 
-  /*
-   * Temporary frontend-only connection.
-   *
-   * Later:
-   * POST /api/tools/{tool.id}/connect
-   *
-   * The backend will validate and securely store
-   * the credentials. The frontend must never persist
-   * tokens/API keys in localStorage.
-   */
   const handleConnect = async () => {
-    setIsConnecting(true);
+    const missingRequiredField = fields.find(
+      (field) =>
+        field.required &&
+        !values[field.key]?.trim(),
+    );
+
+    if (missingRequiredField) {
+      setError(
+        `${missingRequiredField.label} is required.`,
+      );
+      return;
+    }
 
     try {
-      await new Promise((resolve) =>
-        setTimeout(resolve, 700),
+      setIsConnecting(true);
+      setError(null);
+
+      await connectTool(
+        tool.providerId,
+        values,
       );
 
-      onConnected?.(tool.id);
+      await onConnected?.();
+
       onOpenChange(false);
+    } catch (error) {
+      console.error(
+        `Failed to connect ${tool.providerId}:`,
+        error,
+      );
+
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Failed to connect the integration.",
+      );
     } finally {
       setIsConnecting(false);
-    }
-  };
-
-  const renderTextInput = ({
-    id,
-    label,
-    placeholder,
-    value,
-    field,
-    type = "text",
-  }: {
-    id: string;
-    label: string;
-    placeholder: string;
-    value: string;
-    field: keyof ConnectionForm;
-    type?: string;
-  }) => (
-    <div className="space-y-2">
-      <Label htmlFor={id}>{label}</Label>
-
-      <Input
-        id={id}
-        type={type}
-        placeholder={placeholder}
-        value={value}
-        onChange={(event) =>
-          updateField(field, event.target.value)
-        }
-        disabled={isConnecting}
-      />
-    </div>
-  );
-
-  const renderFields = () => {
-    switch (tool.id) {
-      case "jenkins":
-        return (
-          <>
-            {renderTextInput({
-              id: "jenkins-url",
-              label: "Jenkins URL",
-              placeholder:
-                "https://jenkins.example.com",
-              value: form.url,
-              field: "url",
-            })}
-
-            {renderTextInput({
-              id: "jenkins-username",
-              label: "Username",
-              placeholder: "Username",
-              value: form.username,
-              field: "username",
-            })}
-
-            {renderTextInput({
-              id: "jenkins-token",
-              label: "API Token",
-              placeholder: "Jenkins API token",
-              value: form.token,
-              field: "token",
-              type: "password",
-            })}
-          </>
-        );
-
-      case "github":
-        return (
-          <>
-            {renderTextInput({
-              id: "github-url",
-              label: "GitHub URL",
-              placeholder: "https://github.com",
-              value: form.url,
-              field: "url",
-            })}
-
-            {renderTextInput({
-              id: "github-token",
-              label: "Personal Access Token",
-              placeholder: "GitHub token",
-              value: form.token,
-              field: "token",
-              type: "password",
-            })}
-          </>
-        );
-
-      case "prometheus":
-        return (
-          <>
-            {renderTextInput({
-              id: "prometheus-url",
-              label: "Prometheus URL",
-              placeholder:
-                "http://localhost:9090",
-              value: form.url,
-              field: "url",
-            })}
-
-            {renderTextInput({
-              id: "prometheus-token",
-              label: "API Token",
-              placeholder:
-                "API token if authentication is enabled",
-              value: form.token,
-              field: "token",
-              type: "password",
-            })}
-          </>
-        );
-
-      case "grafana":
-        return (
-          <>
-            {renderTextInput({
-              id: "grafana-url",
-              label: "Grafana URL",
-              placeholder:
-                "https://grafana.example.com",
-              value: form.url,
-              field: "url",
-            })}
-
-            {renderTextInput({
-              id: "grafana-token",
-              label: "API Token",
-              placeholder: "Grafana API token",
-              value: form.token,
-              field: "token",
-              type: "password",
-            })}
-          </>
-        );
-
-      case "kubernetes":
-        return (
-          <>
-            {renderTextInput({
-              id: "kubernetes-name",
-              label: "Cluster Name",
-              placeholder: "production-cluster",
-              value: form.projectId,
-              field: "projectId",
-            })}
-
-            {renderTextInput({
-              id: "kubernetes-url",
-              label: "API Server URL",
-              placeholder:
-                "https://kubernetes-api-server",
-              value: form.url,
-              field: "url",
-            })}
-
-            {renderTextInput({
-              id: "kubernetes-token",
-              label: "Service Account Token",
-              placeholder:
-                "Kubernetes authentication token",
-              value: form.token,
-              field: "token",
-              type: "password",
-            })}
-          </>
-        );
-
-      case "docker":
-        return (
-          <>
-            {renderTextInput({
-              id: "docker-host",
-              label: "Docker Host",
-              placeholder:
-                "unix:///var/run/docker.sock",
-              value: form.url,
-              field: "url",
-            })}
-
-            {renderTextInput({
-              id: "docker-token",
-              label: "Registry Token",
-              placeholder:
-                "Optional registry token",
-              value: form.token,
-              field: "token",
-              type: "password",
-            })}
-          </>
-        );
-
-      case "gcp":
-        return (
-          <>
-            {renderTextInput({
-              id: "gcp-project",
-              label: "GCP Project ID",
-              placeholder: "my-gcp-project",
-              value: form.projectId,
-              field: "projectId",
-            })}
-
-            <div className="rounded-lg border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
-              Google Cloud authentication will be
-              handled securely by the backend. Do not
-              paste service-account credentials into
-              this frontend form.
-            </div>
-          </>
-        );
-
-      default:
-        return null;
     }
   };
 
@@ -326,21 +134,64 @@ export function ToolConnectionDialog({
           </DialogTitle>
 
           <DialogDescription>
-            Configure the connection required for
-            CloudOps AI to access {tool.name}.
+            Configure {tool.name} so CloudOps AI can
+            use its available tools when investigating
+            your infrastructure.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          {renderFields()}
+          {fields.map((field) => (
+            <div
+              key={field.key}
+              className="space-y-2"
+            >
+              <Label htmlFor={`${tool.providerId}-${field.key}`}>
+                {field.label}
+              </Label>
+
+              <Input
+                id={`${tool.providerId}-${field.key}`}
+                type={
+                  field.type === "password" ||
+                  field.secret
+                    ? "password"
+                    : "text"
+                }
+                placeholder={`Enter ${field.label.toLowerCase()}`}
+                value={values[field.key] ?? ""}
+                onChange={(event) =>
+                  updateField(
+                    field.key,
+                    event.target.value,
+                  )
+                }
+                disabled={isConnecting}
+                autoComplete="off"
+              />
+            </div>
+          ))}
+
+          {fields.length === 0 && (
+            <div className="rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">
+              This integration does not require any
+              connection credentials.
+            </div>
+          )}
+
+          {error && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
 
           <div className="flex items-start gap-2 rounded-lg border bg-muted/30 p-3 text-xs leading-5 text-muted-foreground">
             <KeyRound className="mt-0.5 h-3.5 w-3.5 shrink-0" />
 
             <span>
-              Credentials will be sent to the backend
-              for validation and secure storage. They
-              will not be persisted by this frontend.
+              Credentials are sent directly to the
+              CloudOps backend for secure storage. They
+              are not persisted by this frontend.
             </span>
           </div>
         </div>
@@ -348,21 +199,24 @@ export function ToolConnectionDialog({
         <DialogFooter>
           <Button
             variant="ghost"
-            onClick={() =>
-              onOpenChange(false)
-            }
+            onClick={() => onOpenChange(false)}
             disabled={isConnecting}
           >
             Cancel
           </Button>
 
           <Button
-            onClick={handleConnect}
+            onClick={() => void handleConnect()}
             disabled={isConnecting}
           >
-            {isConnecting
-              ? "Connecting..."
-              : "Connect"}
+            {isConnecting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Connecting...
+              </>
+            ) : (
+              "Connect"
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

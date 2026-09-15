@@ -247,6 +247,7 @@ export function ChatArea({
       const response =
         await sendChatMessage({
           ...request,
+          chatId: chat.id,
           message: trimmedContent,
         });
 
